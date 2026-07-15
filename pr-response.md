@@ -59,6 +59,9 @@ The reviewer's point also made me reconsider my argument for alphabetical orderi
 
 For those reasons, I would implement the maintainer's preferred default of newest-first. At the same time, I would note that a future sort or filter option is probably the more complete answer to the "I can't find a specific title" problem than trying to solve it through the default ordering alone.
 
+**Bug found while testing:**
+While writing the sort-order test, I discovered `get_watchlist()` was already broken — it called `entry.film.to_dict()`, but `WatchlistEntry` had no relationship configured to `Film`, only `CollectionEntry` did (via the `backref="film"` on `Film.collection_entries`). This meant `get_watchlist()` would have thrown an `AttributeError` on any real call, but no existing test exercised it deeply enough to catch this before I added mine. I fixed it by adding a matching `watchlist_entries` relationship with `backref="film"` on the `Film` model.
+
 ## Comment 6 — Rebase
 **What conflicted:**
 **How I resolved it:**
