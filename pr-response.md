@@ -3,6 +3,8 @@
 ## AI Usage
 **Comment 4:** After drafting an initial position (keep `public=True`, justified by low friction for social discovery), I asked Claude to act as a devil's advocate and raise counterarguments a careful reviewer might make. It surfaced three: (1) the benefit of a public default is back-loaded while the privacy cost is front-loaded, so the tradeoff barely applies to brand-new users; (2) my proposed mitigation (surfacing the visibility setting clearly) isn't actually implemented in this PR, so I shouldn't present it as already reducing risk; (3) claiming the privacy cost is "relatively low" is a judgment call that varies per user and isn't really the developer's to make. I agreed with all three and revised my response — I kept the same final position (`public=True`), but changed the justification from "the cost is low" to "the feature is fundamentally social, and that's the design priority, not a claim about how much any given user should care about privacy." I also reframed the visibility-setting idea as a follow-up recommendation rather than a mitigation already in place.
 
+**Comment 5:** After drafting an initial response agreeing with the maintainer's date-added preference, I asked Claude to raise counterarguments. It surfaced three: (1) my consistency argument (matching `get_collection()`'s sort order) conflated a collection's diary-like purpose with a watchlist's planning purpose, which are actually different; (2) my case for alphabetical ordering (helping locate a specific title) confused sorting with search — search is the better tool for that problem, not a different default sort; (3) I was implicitly treating my own reasoning as more evidence-based than the maintainer's, when really both are unproven design judgments. I agreed with all three and revised my response — I kept the same final position (newest-first) but demoted the consistency argument to a secondary point, replaced the alphabetical justification with the more honest "stable positioning" argument, and added an explicit acknowledgment that my conclusion is a judgment call, not something backed by usage data.
+
 ## Comment 1 — Rename
 **What I did:**
 Renamed `save_to_watchlist()` to `add_to_watchlist()` in `services/watchlist_service.py`. Then I updated the one place that called it — `routes/watchlist/watchlist.py` — both the import line and the actual function call inside `add_film()`.
@@ -43,8 +45,19 @@ The tradeoff I am accepting is that some users, especially new users and users w
 
 ## Comment 5 — Sort order
 **My position:**
+I would default watchlists to date-added order (newest first), which matches the maintainer's preference. That said, I want to explain my own reasoning rather than simply agreeing with it, and I also want to be honest about where my initial argument was weaker than I first thought.
+
 **Reasoning:**
+A watchlist functions more as a planning tool than an archive. It is a working list of things someone intends to watch rather than a record they browse from beginning to end. When I imagine opening a watchlist, the questions that come to mind are things like "What did I add recently?" or "What should I watch next?" Newest-first surfaces the entries that are most likely to reflect a user's current interests, which seems more aligned with that behavior than alphabetical ordering.
+
+I initially also pointed to the fact that `get_collection()` already sorts films by `date_added` descending and argued that matching it would create consistency across the app. After thinking about it more, I do not think that is the strongest argument. A collection is a record of completed activity, where newest-first naturally supports a diary or viewing-history style experience. A watchlist serves a different purpose. The fact that one list uses a particular ordering does not automatically mean the other should. Consistency still has some value, but I see it as a secondary consideration rather than the main justification.
+
+I also want to acknowledge that my reasoning is still a design judgment rather than an evidence-based conclusion. The maintainer's comment says that most users want to see what they added recently, and while I arrived at the same preference, I do not have usage data that proves it. My position is based on how I think people are likely to use a watchlist, not on measured user behavior. Because of that, I would not claim my argument is more rigorously supported than the maintainer's. I simply reached the same conclusion through a different line of reasoning tied to the purpose of the feature.
+
 **Engagement with reviewer's point:**
+The reviewer's point also made me reconsider my argument for alphabetical ordering. My first thought was that alphabetical order could help users find a specific title in a large watchlist, but I do not think that is actually a strong justification. If someone is trying to locate a particular film, search or filtering is a much better solution than relying on any default sort order. A stronger argument for alphabetical ordering is that it provides stable, predictable positioning that does not change every time a new film is added. That is a real advantage, but I do not think it outweighs the benefits of newest-first for a feature centered on future viewing plans and current interests.
+
+For those reasons, I would implement the maintainer's preferred default of newest-first. At the same time, I would note that a future sort or filter option is probably the more complete answer to the "I can't find a specific title" problem than trying to solve it through the default ordering alone.
 
 ## Comment 6 — Rebase
 **What conflicted:**
