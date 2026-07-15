@@ -74,3 +74,34 @@ The missing WatchlistEntry class was harder to catch, since Git reported the reb
 How I verified no conflict remains:
 After re-adding WatchlistEntry, I ran the full test suite and all 7 tests passed. I also ran git log --oneline to confirm my full commit history replayed cleanly on top of upstream/main with no merge commits — every one of my commits (rename, dedup, tests, docs, sort order, etc.) appears individually, in order, with nothing collapsed or duplicated.
 The main lesson from this: a rebase reporting "success" with no conflict markers doesn't guarantee nothing broke. Since my new model class didn't textually overlap with anything in upstream's version of the file, Git had no way to know it needed to be preserved. Running the test suite immediately after the rebase — rather than trusting the "successfully rebased" message alone — is what actually caught the problem.
+
+
+## What this PR does
+
+Adds a watchlist feature to CineLog, allowing users to track films they intend to watch (separate from their collection of films they've already seen). This includes:
+
+- `add_to_watchlist()` service function (renamed from an earlier `save_to_watchlist()` for naming consistency with the codebase)
+- Deduplication so a user can't add the same film to their watchlist twice (`AlreadyInWatchlistError`, mirroring the existing collection service's pattern)
+- Route-level error handling returning proper 404/409 responses instead of unhandled 500s
+- `get_watchlist()` returns entries sorted **newest-added first**
+- Tests covering nonexistent-film and duplicate-entry cases
+- A model relationship fix (`Film.watchlist_entries` / `backref="film"`) that was silently dropped during a rebase onto upstream's UUID migration — caught by running the test suite post-rebase, not by Git itself
+
+## Design decisions
+
+**Visibility default — `public=True`:** Watchlists are public by default because the feature is fundamentally social — the goal is for friends/followers to discover films through each other, which a private-by-default setting would undermine. This isn't a claim that the privacy cost is negligible for every user (it isn't — for some users, watchlist contents could reveal sensitive interests); it's a design priority tradeoff, and one I think is reasonable to flag as a followup: the visibility setting should be surfaced clearly to users rather than left buried in settings. That surfacing isn't implemented in this PR.
+
+**Sort order — newest-added first:** A watchlist is a planning tool ("what should I watch next?"), not an archive, so surfacing recent additions seemed like the better default over alphabetical order. This matches the maintainer's preference, though I want to be transparent that it's a design judgment, not something backed by usage data — see Comment 5 in `pr-response.md` for the full reasoning and where my initial argument (consistency with collection sorting) turned out weaker than I first thought.
+
+## How to manually test
+
+1. Start the app and create a test user + film (or use existing fixtures/seed data).
+2. **Add to watchlist:** `POST` to the watchlist endpoint with a valid `film_id` — confirm a `WatchlistEntry` row is created and the response is successful.
+3. **Duplicate check:** Repeat the same `POST` with the same `user_id`/`film_id` — confirm you get a `409` response and no second row is created in the database.
+4. **Nonexistent film:** `POST` with a made-up/fake `film_id` — confirm a `404` response.
+5. **Sort order:** Add two or more films to a watchlist a few seconds apart, then `GET` the watchlist — confirm the most recently added film appears first.
+6. **Run the automated suite:** `pytest tests/ -v` — all 7 tests (4 collection + 3 watchlist) should pass.
+
+
+
+<img width="734" height="428" alt="Screenshot 2026-07-14 at 11 03 48 PM" src="https://github.com/user-attachments/assets/25a4854a-7e1e-4c7d-b38e-a24274f7f96a" />
