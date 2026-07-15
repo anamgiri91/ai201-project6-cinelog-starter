@@ -24,8 +24,10 @@ I ran the full test suite and all 4 existing tests still passed. That said, I wa
 One more thing worth flagging: `WatchlistEntry` doesn't have a database-level `UniqueConstraint` the way `CollectionEntry` does (`unique_user_film_collection`). So right now my dedup check is the *only* thing preventing duplicate watchlist rows — it's happening at the application level, not enforced by the database. I didn't touch the model for this comment since that felt out of scope, but it's a gap worth knowing about.
 
 ## Comment 3 — Missing test
-**What I did:**
-**How I verified:**
+What I did:
+Created tests/test_watchlist.py and wrote two tests, modeled directly on the patterns in test_collection.py. First, test_add_to_watchlist_nonexistent_film_raises, which mirrors test_add_to_collection_nonexistent_film_raises exactly — same fake UUID, same pytest.raises structure, just calling add_to_watchlist() instead. Second, since I'd already built the dedup logic in Comment 2 but had no test covering it, I also wrote test_add_to_watchlist_duplicate_raises, modeled on test_add_to_collection_duplicate_raises — it adds a film once, confirms a second add raises AlreadyInWatchlistError, then queries WatchlistEntry directly to confirm only one row actually exists in the database. I reused the same app, sample_user, and sample_film fixture pattern from test_collection.py rather than writing new ones.
+How I verified:
+Ran pytest tests/test_watchlist.py -v and both tests passed. Then ran the full suite with pytest tests/ -v to confirm all tests pass together with no regressions.
 
 ## Comment 4 — Default visibility
 **My position:**
@@ -63,9 +65,12 @@ For those reasons, I would implement the maintainer's preferred default of newes
 While writing the sort-order test, I discovered `get_watchlist()` was already broken — it called `entry.film.to_dict()`, but `WatchlistEntry` had no relationship configured to `Film`, only `CollectionEntry` did (via the `backref="film"` on `Film.collection_entries`). This meant `get_watchlist()` would have thrown an `AttributeError` on any real call, but no existing test exercised it deeply enough to catch this before I added mine. I fixed it by adding a matching `watchlist_entries` relationship with `backref="film"` on the `Film` model.
 
 ## Comment 6 — Rebase
-**What conflicted:**
-**How I resolved it:**
-**How I verified no conflict remains:**
-
-## PR Description
-<!-- Written at the end — feature overview, design decisions, manual testing steps -->
+What conflicted:
+I added upstream as a second git remote pointing to the original repo (since my fork's origin/main was stale) and ran git fetch upstream followed by git rebase upstream/main. The rebase stopped once, on a .gitignore add/add conflict — both my branch and upstream's main had independently added a .gitignore file, so Git couldn't automatically pick one.
+More significantly, the actual UUID migration didn't surface as a Git conflict at all, even though it should have. My models.py had a WatchlistEntry class with an integer film_id, and upstream's refactored models.py didn't have WatchlistEntry at all (since that's a branch-only feature). Because there was no overlapping text for Git to flag, the rebase silently resolved by keeping upstream's version of the file — which meant WatchlistEntry was dropped from models.py entirely, with no conflict markers and no warning.
+How I resolved it:
+For the .gitignore conflict, I combined both versions manually, keeping the union of ignore patterns from each (mine had .pytest_cache/, upstream's didn't, so I kept both sets), removed the conflict markers, staged it, and ran git rebase --continue.
+The missing WatchlistEntry class was harder to catch, since Git reported the rebase as fully successful. I only found it because I ran pytest tests/ -v after the rebase completed, as a sanity check, and got an ImportError: cannot import name 'WatchlistEntry' from 'models'. I re-added the WatchlistEntry class to models.py, using db.String(36) for film_id instead of the old db.Integer, matching the same pattern the refactor used for CollectionEntry.film_id. I also updated a stale docstring in add_to_watchlist() that still described film_id as an integer.
+How I verified no conflict remains:
+After re-adding WatchlistEntry, I ran the full test suite and all 7 tests passed. I also ran git log --oneline to confirm my full commit history replayed cleanly on top of upstream/main with no merge commits — every one of my commits (rename, dedup, tests, docs, sort order, etc.) appears individually, in order, with nothing collapsed or duplicated.
+The main lesson from this: a rebase reporting "success" with no conflict markers doesn't guarantee nothing broke. Since my new model class didn't textually overlap with anything in upstream's version of the file, Git had no way to know it needed to be preserved. Running the test suite immediately after the rebase — rather than trusting the "successfully rebased" message alone — is what actually caught the problem.
